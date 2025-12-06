@@ -24,6 +24,8 @@ def main():
     from PySide6.QtCore import QTimer
     print("[app] qt imported", flush=True)
     app = QApplication(sys.argv)
+    # 设置关闭最后一个窗口时不退出应用程序
+    app.setQuitOnLastWindowClosed(False)
     print("[app] qapp created", flush=True)
     try:
         import qfluentwidgets as qf

@@ -71,30 +71,9 @@ def login(base: str, account: str, password: str, carrier: str, callback: str = 
         data = parse_jsonp(resp.text)
         logger.info(f"登录解析结果: result={data.get('result')}, msg={data.get('msg')}")
         
-        if int(data.get("result", 0)) == 1:
-            logger.info("登录成功 (第一种方式)")
-            return {"ok": True, "msg": data.get("msg", "success"), "data": data}
-        
-        # 尝试第二种登录方式
-        logger.debug("尝试第二种登录方式")
-        params["user_password"] = None
-        params["password"] = password
-        
-        # 记录第二种方式的日志，脱敏密码
-        log_params = {k: v for k, v in params.items() if v is not None}
-        if log_params.get("password"):
-            log_params["password"] = "****"
-        logger.info(f"登录请求(第二种方式): URL={url}, 参数={log_params}")
-        
-        resp = requests.get(url, params={k: v for k, v in params.items() if v is not None}, timeout=timeout)
-        logger.debug(f"登录响应(第二种方式): 状态码={resp.status_code}, 内容长度={len(resp.text)} 字节")
-        
-        data = parse_jsonp(resp.text)
-        logger.info(f"登录解析结果(第二种方式): result={data.get('result')}, msg={data.get('msg')}")
-        
         ok = int(data.get("result", 0)) == 1
         if ok:
-            logger.info("登录成功 (第二种方式)")
+            logger.info("登录成功")
         else:
             logger.warning(f"登录失败: {data.get('msg', '未知错误')}")
         

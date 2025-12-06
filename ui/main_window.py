@@ -357,6 +357,29 @@ class MainWindow(QWidget):
                 t.show_message("登录", tray_msg)
         except Exception:
             pass
+        
+        # 添加toast通知
+        try:
+            import os
+            import sys
+            script_path = os.path.abspath(__file__)
+            app_path = os.path.dirname(os.path.dirname(script_path))
+            sys.path.append(app_path)
+            from eportal_client import show_toast
+            
+            # 为toast创建启动命令
+            if getattr(sys, "frozen", False):
+                launch_cmd = sys.executable
+            else:
+                launch_cmd = f"{sys.executable} {os.path.join(app_path, 'app.py')}"
+            
+            if ok:
+                show_toast("登录成功", "校园网络已登录成功", launch_cmd=launch_cmd)
+            else:
+                show_toast("登录失败", f"登录失败：{msg.splitlines()[0]}", launch_cmd=launch_cmd)
+        except Exception as e:
+            from loguru import logger
+            logger.warning(f"无法显示toast通知: {e}")
         if ok:
             self.retry_interval = int(self.config.get("check_interval", 15))
             if self.timer.isActive():
@@ -446,6 +469,11 @@ class MainWindow(QWidget):
         if hasattr(self, "bgLayer") and self.bgLayer:
             self.bgLayer.setGeometry(self.rect())
     
+    def closeEvent(self, event):
+        # 阻止窗口关闭，而是隐藏窗口
+        event.ignore()
+        self.hide()
+
     def eventFilter(self, obj, event):
         """事件过滤器，用于检测系统唤醒事件"""
         # 检测WindowActivate事件，这通常在系统从睡眠中唤醒或解锁屏幕时触发
