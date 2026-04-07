@@ -6,8 +6,9 @@ import winreg
 APP_NAME = "JXUSTNetLogin"
 
 
+# 注册表自启动相关函数 - 使用HKEY_LOCAL_MACHINE
 def _run_key():
-    return winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
+    return winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
 
 
 def _launch_command() -> str:

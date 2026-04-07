@@ -4,3 +4,4 @@ requests>=2.31
 keyring>=24.3
 PyYAML>=6.0
 loguru>=0.7
+winotify>=1.1.0

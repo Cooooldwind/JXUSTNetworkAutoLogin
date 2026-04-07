@@ -70,7 +70,9 @@ class MainWindow(QWidget):
             self.passwordEdit = PasswordLineEdit()
             self.passwordEdit.setPlaceholderText("密码")
             self.carrierBox = ComboBox()
-            self.autoStartBox = CheckBox("自启动")
+            # 替换三种自启动复选框为下拉框
+            self.autoStartComboBox = ComboBox()
+            self.autoStartComboBox.addItems(["无", "注册表自启动"])
             self.autoReconnectBox = CheckBox("自动重连")
             self.loginBtn = PrimaryPushButton("登录")
             self.logoutBtn = PushButton("注销")
@@ -82,13 +84,15 @@ class MainWindow(QWidget):
             self.passwordEdit = QLineEdit()
             self.passwordEdit.setEchoMode(QLineEdit.Password)
             self.carrierBox = QComboBox()
-            self.autoStartBox = QCheckBox("自启动")
+            # 替换三种自启动复选框为下拉框
+            self.autoStartComboBox = QComboBox()
+            self.autoStartComboBox.addItems(["无", "注册表自启动"])
             self.autoReconnectBox = QCheckBox("自动重连")
             self.loginBtn = QPushButton("登录")
             self.logoutBtn = QPushButton("注销")
             self.infobar_class = None
             self.infobar_pos = None
-        self.carrierBox.addItems(["none", "telecom", "cmcc", "unicom"])
+        self.carrierBox.addItems(["校园网", "中国电信", "中国移动", "中国联通"])
         self.accountEdit.setText(self.config.get("account", ""))
         try:
             from core.network import compose_account
@@ -101,12 +105,23 @@ class MainWindow(QWidget):
                 self.passwordEdit.setText(pwd_saved)
         except Exception:
             self.passwordEdit.setText("")
-        idx = max(0, self.carrierBox.findText(self.config.get("carrier", "none")))
+        # 运营商显示名称映射
+        carrier_map = {
+            "none": "校园网",
+            "telecom": "中国电信",
+            "cmcc": "中国移动",
+            "unicom": "中国联通"
+        }
+        carrier_value = self.config.get("carrier", "none")
+        carrier_display = carrier_map.get(carrier_value, carrier_value)
+        idx = max(0, self.carrierBox.findText(carrier_display))
         self.carrierBox.setCurrentIndex(idx)
-        if isinstance(self.autoStartBox, QCheckBox):
-            self.autoStartBox.setChecked(bool(self.config.get("auto_start", False)))
+        # 初始化自启动方式下拉框
+        auto_start_config = self.config.get("auto_start", {})
+        if auto_start_config.get("registry", False):
+            self.autoStartComboBox.setCurrentText("注册表自启动")
         else:
-            self.autoStartBox.setChecked(bool(self.config.get("auto_start", False)))
+            self.autoStartComboBox.setCurrentText("无")
         if isinstance(self.autoReconnectBox, QCheckBox):
             self.autoReconnectBox.setChecked(bool(self.config.get("auto_reconnect", True)))
         else:
@@ -120,7 +135,9 @@ class MainWindow(QWidget):
         form.addWidget(QLabel("运营商"))
         form.addWidget(self.carrierBox)
         form.addSpacing(8)
-        form.addWidget(self.autoStartBox)
+        # 添加自启动方式下拉框
+        form.addWidget(QLabel("自启动方式"))
+        form.addWidget(self.autoStartComboBox)
         form.addWidget(self.autoReconnectBox)
         form.addSpacing(16)
         btnRow = QHBoxLayout()
@@ -135,10 +152,8 @@ class MainWindow(QWidget):
         root.addWidget(rightCard, 0)
         self.loginBtn.clicked.connect(self.login)
         self.logoutBtn.clicked.connect(self.logout)
-        if isinstance(self.autoStartBox, QCheckBox):
-            self.autoStartBox.stateChanged.connect(self._toggle_autostart)
-        else:
-            self.autoStartBox.checkedChanged.connect(self._toggle_autostart)
+        # 连接自启动下拉框的信号槽
+        self.autoStartComboBox.currentTextChanged.connect(self._toggle_autostart)
         if isinstance(self.autoReconnectBox, QCheckBox):
             self.autoReconnectBox.stateChanged.connect(self._toggle_autoreconnect)
         else:
@@ -179,17 +194,44 @@ class MainWindow(QWidget):
     def _save_inputs(self):
         from core import config as cfg
         self.config["account"] = self.accountEdit.text().strip()
-        self.config["carrier"] = self.carrierBox.currentText()
+        # 运营商显示名称映射
+        carrier_map = {
+            "校园网": "none",
+            "中国电信": "telecom",
+            "中国移动": "cmcc",
+            "中国联通": "unicom"
+        }
+        carrier_display = self.carrierBox.currentText()
+        self.config["carrier"] = carrier_map.get(carrier_display, carrier_display)
         cfg.save_config(self.config)
 
-    def _toggle_autostart(self):
+    def _toggle_autostart(self, selected_option):
         from core import autostart
-        enabled = self.autoStartBox.isChecked() if isinstance(self.autoStartBox, QCheckBox) else self.autoStartBox.isChecked()
-        ok = autostart.enable_autostart() if enabled else autostart.disable_autostart()
-        self.config["auto_start"] = enabled and ok
-        self.show_info("自启动已开启" if self.config["auto_start"] else "自启动已关闭", ok)
         from core import config as cfg
+        
+        # 先禁用自启动
+        autostart.disable_autostart()
+        
+        # 重置配置
+        self.config["auto_start"] = {
+            "registry": False
+        }
+        
+        success = True
+        
+        # 根据选择启用对应的自启动方式
+        if selected_option == "注册表自启动":
+            success = autostart.enable_autostart()
+            self.config["auto_start"]["registry"] = success
+            message = "注册表自启动已开启" if success else "注册表自启动开启失败"
+        else:  # "无"
+            message = "自启动已关闭"
+        
+        # 保存配置
         cfg.save_config(self.config)
+        
+        # 显示提示
+        self.show_info(message, success)
 
     def _toggle_autoreconnect(self):
         val = self.autoReconnectBox.isChecked() if isinstance(self.autoReconnectBox, QCheckBox) else self.autoReconnectBox.isChecked()
@@ -294,6 +336,8 @@ class MainWindow(QWidget):
                         msg = f"密码错误或无效: {msg}"
                     if "用户" in msg or "user" in msg.lower():
                         msg = f"用户不存在或无效: {msg}"
+                    if "在线" in msg:
+                        ok = True
                 
                 logger.info(f"登录{'成功' if ok else '失败'}: {msg}")
                 
@@ -301,7 +345,8 @@ class MainWindow(QWidget):
             except Exception as e:
                 # 捕获所有异常并提供友好提示
                 error_msg = f"登录过程发生错误: {str(e)}"
-                logger.error(f"登录异常: {e}", exc_info=True)
+                if str(e).find("在线") > 0:
+                    logger.error(f"登录异常: {e}", exc_info=True)
                 self.bridge.login_done.emit(False, error_msg)
         
         threading.Thread(target=work, daemon=True).start()
@@ -358,29 +403,13 @@ class MainWindow(QWidget):
         except Exception:
             pass
         
-        # 添加toast通知
-        try:
-            import os
-            import sys
-            script_path = os.path.abspath(__file__)
-            app_path = os.path.dirname(os.path.dirname(script_path))
-            sys.path.append(app_path)
-            from eportal_client import show_toast
-            
-            # 为toast创建启动命令
-            if getattr(sys, "frozen", False):
-                launch_cmd = sys.executable
-            else:
-                launch_cmd = f"{sys.executable} {os.path.join(app_path, 'app.py')}"
-            
-            if ok:
-                show_toast("登录成功", "校园网络已登录成功", launch_cmd=launch_cmd)
-            else:
-                show_toast("登录失败", f"登录失败：{msg.splitlines()[0]}", launch_cmd=launch_cmd)
-        except Exception as e:
-            from loguru import logger
-            logger.warning(f"无法显示toast通知: {e}")
+        # 取消toast通知，统一由eportal_client处理
         if ok:
+            # 恢复自动重连设置
+            if hasattr(self, 'auto_reconnect_was_enabled'):
+                self.config["auto_reconnect"] = self.auto_reconnect_was_enabled
+                from core import config as cfg
+                cfg.save_config(self.config)
             self.retry_interval = int(self.config.get("check_interval", 15))
             if self.timer.isActive():
                 self.timer.setInterval(self.retry_interval * 1000)
@@ -392,31 +421,58 @@ class MainWindow(QWidget):
         base = self.config.get("endpoint_base")
         cb = self.config.get("callback_logout", "dr1004")
         ip = get_local_ip()
+        # 暂时禁用自动重连
+        self.auto_reconnect_was_enabled = self.config.get("auto_reconnect", True)
+        self.config["auto_reconnect"] = False
         def work():
             r = do_logout(base, ip, cb)
             self.bridge.logout_done.emit(bool(r.get("ok")), r.get("msg", ""))
         threading.Thread(target=work, daemon=True).start()
 
     def _on_logout_done(self, ok: bool, msg: str):
-        self.show_info("注销成功" if ok else f"注销失败：{msg}", ok)
-        try:
-            self._set_controls_enabled(True)
-        except Exception:
-            pass
-        try:
-            if ok:
+        if ok:
+            self.show_info("注销成功", ok)
+            try:
                 from loguru import logger as _lg
                 _lg.info("logout success")
-            else:
+                # 显示注销成功的toast
+                try:
+                    import os
+                    import sys
+                    script_path = os.path.abspath(__file__)
+                    app_path = os.path.dirname(os.path.dirname(script_path))
+                    sys.path.append(app_path)
+                    from eportal_client import show_toast
+                    
+                    # 为toast创建启动命令
+                    if getattr(sys, "frozen", False):
+                        launch_cmd = sys.executable
+                    else:
+                        launch_cmd = f"{sys.executable} {os.path.join(app_path, 'app.py')}"
+                    
+                    show_toast("注销成功", "请在配置界面手动连接", launch_cmd=launch_cmd)
+                except Exception as e:
+                    from loguru import logger
+                    logger.warning(f"无法显示toast通知: {e}")
+            except Exception:
+                pass
+        else:
+            # 注销失败，只记录日志，不显示提示
+            try:
                 from loguru import logger as _lg
                 _lg.warning(f"logout failed: {msg}")
+            except Exception:
+                pass
+        try:
+            self._set_controls_enabled(True)
         except Exception:
             pass
         try:
             from ui.tray import get_tray
             t = get_tray()
             if t:
-                t.show_message("注销", "成功" if ok else f"失败：{msg}")
+                if ok:
+                    t.show_message("注销", "成功")
         except Exception:
             pass
 

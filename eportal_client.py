@@ -84,10 +84,10 @@ def load_config_encrypted() -> dict:
 
 # ---------- Windows autostart ----------
 def register_run_key():
-    """Add this exe to HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"""
+    """Add this exe to HKLM\Software\Microsoft\Windows\CurrentVersion\Run"""
     try:
         exe_path = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(sys.argv[0])
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                              r"Software\Microsoft\Windows\CurrentVersion\Run",
                              0, winreg.KEY_SET_VALUE)
         winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, f'"{exe_path}" --run-from-startup')
@@ -232,25 +232,30 @@ def polling_loop(cfg):
                 logger.info("Connectivity DOWN - attempting login")
                 ok, text, parsed = attempt_login(username, password, operator)
                 if not parsed:
-                    # failed parsing or no response, show toast to reconfigure
-                    exe = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(sys.argv[0])
-                    launch = f'"{exe}" --config'
-                    show_toast("登录异常", "无法登录校园网络，请点击重新配置。", launch_cmd=launch)
+                    # 404Error 或未连接校园网，不提示
+                    logger.warning("Failed to parse response, likely 404 or not connected to campus network")
                 else:
                     ret = parsed.get("ret_code")
-                    if ret != 2:
+                    msg = parsed.get("msg", "")
+                    if ret == 2:
+                        # 成功连接，提示
+                        # 运营商显示名称映射
+                        carrier_map = {
+                            "none": "校园网",
+                            "telecom": "中国电信",
+                            "cmcc": "中国移动",
+                            "unicom": "中国联通"
+                        }
+                        carrier_display = carrier_map.get(operator, operator)
+                        show_toast("连接成功", f"用户：{username}，运营商：{carrier_display}")
+                    elif "已经在线" in msg or "already online" in msg.lower():
+                        # 已经在线 Error，不提示
+                        logger.info("Already online, no toast needed")
+                    else:
+                        # 其他情况，放出基本提示并给出进入配置界面 UI 的按钮
                         exe = sys.executable if getattr(sys, "frozen", False) else os.path.abspath(sys.argv[0])
                         launch = f'"{exe}" --config'
-                        show_toast("登录失败", f"登录返回 ret_code={ret}，请点击重新配置。", launch_cmd=launch)
-                    else:
-                        # success
-                        # write response to temp file and set click to open it with notepad
-                        tf = tempfile.NamedTemporaryFile(delete=False, suffix=".txt", prefix="eportal_", dir=APP_FOLDER)
-                        tf.write(text.encode("utf-8"))
-                        tf.close()
-                        # launch command for toast: notepad "file"
-                        launch = f'notepad.exe "{tf.name}"'
-                        show_toast("登录成功", "校园网络已登录成功，点击查看详细返回。", launch_cmd=launch)
+                        show_toast("登录异常", "无法登录校园网络，请点击进入配置界面。", launch_cmd=launch)
             # sleep
         except Exception:
             logger.exception("Exception in polling loop")

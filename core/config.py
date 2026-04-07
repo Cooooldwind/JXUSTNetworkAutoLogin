@@ -31,7 +31,11 @@ def default_config() -> dict:
     return {
         "account": "",
         "carrier": "none",
-        "auto_start": False,
+        "auto_start": {
+            "registry": False,
+            "task_scheduler": False,
+            "service": False
+        },
         "auto_reconnect": True,
         "check_interval": 15,
         "endpoint_base": "http://10.17.8.18:801",
@@ -48,6 +52,16 @@ def load_config() -> dict:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
             base = default_config()
+            
+            # 迁移旧配置：将单个布尔值 auto_start 转换为字典格式
+            if isinstance(data.get("auto_start"), bool):
+                old_auto_start = data.pop("auto_start")
+                data["auto_start"] = {
+                    "registry": old_auto_start,
+                    "task_scheduler": False,
+                    "service": False
+                }
+            
             base.update(data)
             return base
     except Exception:
