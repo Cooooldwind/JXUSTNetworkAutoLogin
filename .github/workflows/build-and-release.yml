@@ -26,7 +26,7 @@ jobs:
       
       - name: Build with PyInstaller
         run: |
-          pyinstaller JXUSTNetworkAutoLogin.spec
+          pyinstaller --onefile --windowed --add-data "logo.ico;." --add-data "pic.jpg;." --name JXUSTNetworkAutoLogin app.py
       
       - name: Create release
         uses: softprops/action-gh-release@v2
